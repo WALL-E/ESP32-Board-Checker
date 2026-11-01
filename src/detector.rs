@@ -5,6 +5,8 @@ use espflash::flasher::{FlashSize, Flasher};
 use espflash::target::Chip;
 use serialport::{FlowControl, SerialPortInfo, SerialPortType, UsbPortInfo};
 
+use crate::i18n::{tr, trf};
+
 /// 一个可选的串口
 pub struct PortItem {
     pub name: String,
@@ -25,7 +27,7 @@ pub struct BoardReport {
     pub verdict_reason: String,
 }
 
-/// 扫描系统串口，并把 USB 设备的信息作为描述展示
+/// 扫描系统串口，并把桥接芯片信息作为描述展示
 pub fn scan_ports(lang: u8) -> Vec<PortItem> {
     let mut ports = serialport::available_ports().unwrap_or_default();
     ports.sort_by_key(|info| port_sort_key(&info.port_name));
@@ -48,10 +50,13 @@ pub fn check_port(port_name: &str, lang: u8) -> Result<BoardReport, String> {
         .flow_control(FlowControl::None)
         .timeout(Duration::from_secs(3))
         .open_native()
-        .map_err(|e| match lang {
-            1 => format!("無法打開串口 {port_name}：{e}"),
-            2 => format!("Cannot open port {port_name}: {e}"),
-            _ => format!("无法打开串口 {port_name}：{e}"),
+        .map_err(|e| {
+            trf!(
+                lang,
+                "无法打开串口 {port_name}：{e}",
+                "無法打開串口 {port_name}：{e}",
+                "Cannot open port {port_name}: {e}"
+            )
         })?;
 
     let connection = Connection::new(
@@ -69,11 +74,12 @@ pub fn check_port(port_name: &str, lang: u8) -> Result<BoardReport, String> {
             let (error, mut connection) = *pair;
             // 连接失败时也尝试复位，避免板子停在下载模式
             let _ = connection.reset();
-            return Err(match lang {
-                1 => format!("未檢測到 ESP 晶片（無法進入下載模式）：{error}"),
-                2 => format!("No ESP chip detected (cannot enter download mode): {error}"),
-                _ => format!("未检测到 ESP 芯片（无法进入下载模式）：{error}"),
-            });
+            return Err(trf!(
+                lang,
+                "未检测到 ESP 芯片（无法进入下载模式）：{error}",
+                "未檢測到 ESP 晶片（無法進入下載模式）：{error}",
+                "No ESP chip detected (cannot enter download mode): {error}"
+            ));
         }
     };
 
@@ -82,69 +88,17 @@ pub fn check_port(port_name: &str, lang: u8) -> Result<BoardReport, String> {
     // 检测完成后复位，让板子回到正常运行模式
     let _ = flasher.connection().reset_after(true, chip);
 
-    let device = device.map_err(|e| match lang {
-        1 => format!("晶片已連接，但讀取裝置資訊失敗：{e}"),
-        2 => format!("Chip connected, but failed to read device info: {e}"),
-        _ => format!("芯片已连接，但读取设备信息失败：{e}"),
+    let device = device.map_err(|e| {
+        trf!(
+            lang,
+            "芯片已连接，但读取设备信息失败：{e}",
+            "晶片已連接，但讀取裝置資訊失敗：{e}",
+            "Chip connected, but failed to read device info: {e}"
+        )
     })?;
 
-    let mac = device.mac_address.clone();
     let flash = flash_text(device.flash_size, lang);
-    let flash_bytes = device.flash_size.size();
-    let mac_valid = mac.as_deref().map(mac_is_valid).unwrap_or(false);
-
-    let (usable, verdict_reason) = if mac.is_none() {
-        (
-            false,
-            tr(
-                lang,
-                "未读取到 MAC 地址（芯片可能处于安全下载模式），无法确认板子状态。",
-                "未讀取到 MAC 位址（晶片可能處於安全下載模式），無法確認板子狀態。",
-                "MAC address not read (chip may be in secure download mode); board status cannot be confirmed.",
-            )
-            .to_string(),
-        )
-    } else if !mac_valid {
-        (
-            false,
-            match lang {
-                1 => format!(
-                    "MAC 位址異常（{}）：全 0 / 全 F 通常表示晶片損壞或仿製晶片。",
-                    mac.clone().unwrap_or_default()
-                ),
-                2 => format!(
-                    "Abnormal MAC address ({}): all-zero or all-F usually indicates a damaged or counterfeit chip.",
-                    mac.clone().unwrap_or_default()
-                ),
-                _ => format!(
-                    "MAC 地址异常（{}）：全 0 / 全 F 通常意味着芯片损坏或仿制芯片。",
-                    mac.clone().unwrap_or_default()
-                ),
-            },
-        )
-    } else if flash_bytes < 1024 * 1024 {
-        (
-            false,
-            match lang {
-                1 => format!("Flash 容量僅 {flash}，低於常見應用的最低要求（1 MB）。"),
-                2 => format!(
-                    "Flash size is only {flash}, below the 1 MB minimum for typical applications."
-                ),
-                _ => format!("Flash 容量仅 {flash}，低于常见应用的最低要求（1 MB）。"),
-            },
-        )
-    } else {
-        (
-            true,
-            tr(
-                lang,
-                "芯片响应正常，Flash 与 MAC 均可读取，可正常烧录与运行。",
-                "晶片回應正常，Flash 與 MAC 均可讀取，可正常燒錄與運行。",
-                "Chip responds normally; Flash and MAC are readable. The board is ready for flashing and operation.",
-            )
-            .to_string(),
-        )
-    };
+    let (usable, verdict_reason) = judge(&device.mac_address, &flash, device.flash_size.size(), lang);
 
     let features = if device.features.is_empty() {
         tr(lang, "未报告", "未報告", "Not reported").to_string()
@@ -158,7 +112,9 @@ pub fn check_port(port_name: &str, lang: u8) -> Result<BoardReport, String> {
             Some((major, minor)) => format!("v{major}.{minor}"),
             None => tr(lang, "未知", "未知", "Unknown").to_string(),
         },
-        mac: mac.unwrap_or_else(|| tr(lang, "未获取", "未獲取", "N/A").to_string()),
+        mac: device
+            .mac_address
+            .unwrap_or_else(|| tr(lang, "未获取", "未獲取", "N/A").to_string()),
         flash,
         crystal: device.crystal_frequency.to_string(),
         features,
@@ -166,6 +122,57 @@ pub fn check_port(port_name: &str, lang: u8) -> Result<BoardReport, String> {
         usable,
         verdict_reason,
     })
+}
+
+/// 判定板子是否可用，并给出理由
+fn judge(mac: &Option<String>, flash: &str, flash_bytes: u32, lang: u8) -> (bool, String) {
+    let Some(mac) = mac else {
+        return (
+            false,
+            tr(
+                lang,
+                "未读取到 MAC 地址（芯片可能处于安全下载模式），无法确认板子状态。",
+                "未讀取到 MAC 位址（晶片可能處於安全下載模式），無法確認板子狀態。",
+                "MAC address not read (chip may be in secure download mode); board status cannot be confirmed.",
+            )
+            .to_string(),
+        );
+    };
+
+    if !mac_is_valid(mac) {
+        return (
+            false,
+            trf!(
+                lang,
+                "MAC 地址异常（{mac}）：全 0 / 全 F 通常意味着芯片损坏或仿制芯片。",
+                "MAC 位址異常（{mac}）：全 0 / 全 F 通常表示晶片損壞或仿製晶片。",
+                "Abnormal MAC address ({mac}): all-zero or all-F usually indicates a damaged or counterfeit chip."
+            ),
+        );
+    }
+
+    if flash_bytes < 1024 * 1024 {
+        return (
+            false,
+            trf!(
+                lang,
+                "Flash 容量仅 {flash}，低于常见应用的最低要求（1 MB）。",
+                "Flash 容量僅 {flash}，低於常見應用的最低要求（1 MB）。",
+                "Flash size is only {flash}, below the 1 MB minimum for typical applications."
+            ),
+        );
+    }
+
+    (
+        true,
+        tr(
+            lang,
+            "芯片响应正常，Flash 与 MAC 均可读取，可正常烧录与运行。",
+            "晶片回應正常，Flash 與 MAC 均可讀取，可正常燒錄與運行。",
+            "Chip responds normally; Flash and MAC are readable. The board is ready for flashing and operation.",
+        )
+        .to_string(),
+    )
 }
 
 fn chip_name(chip: Chip) -> String {
@@ -190,20 +197,27 @@ fn chip_name(chip: Chip) -> String {
 fn flash_text(size: FlashSize, lang: u8) -> String {
     let bytes = size.size();
     if bytes >= 1024 * 1024 {
-        match lang {
-            1 => format!("{} MB（{} 位元組）", bytes / (1024 * 1024), bytes),
-            2 => format!("{} MB ({} bytes)", bytes / (1024 * 1024), bytes),
-            _ => format!("{} MB（{} 字节）", bytes / (1024 * 1024), bytes),
-        }
+        trf!(
+            lang,
+            "{} MB（{} 字节）",
+            "{} MB（{} 位元組）",
+            "{} MB ({} bytes)",
+            bytes / (1024 * 1024),
+            bytes
+        )
     } else {
-        match lang {
-            1 => format!("{} KB（{} 位元組）", bytes / 1024, bytes),
-            2 => format!("{} KB ({} bytes)", bytes / 1024, bytes),
-            _ => format!("{} KB（{} 字节）", bytes / 1024, bytes),
-        }
+        trf!(
+            lang,
+            "{} KB（{} 字节）",
+            "{} KB（{} 位元組）",
+            "{} KB ({} bytes)",
+            bytes / 1024,
+            bytes
+        )
     }
 }
 
+/// 全 0 / 全 F 的 MAC 通常意味着芯片损坏或仿制芯片
 fn mac_is_valid(mac: &str) -> bool {
     let digits: String = mac
         .chars()
@@ -221,15 +235,6 @@ fn describe(info: &SerialPortInfo, lang: u8) -> String {
         SerialPortType::BluetoothPort => tr(lang, "蓝牙串口", "藍牙串口", "Bluetooth").to_string(),
         SerialPortType::PciPort => tr(lang, "PCI 串口", "PCI 串口", "PCI").to_string(),
         _ => tr(lang, "未知串口设备", "未知串口裝置", "Unknown Device").to_string(),
-    }
-}
-
-/// 按语言选择文案：0 简体中文，1 繁体中文，2 English
-fn tr<'a>(lang: u8, zh: &'a str, tw: &'a str, en: &'a str) -> &'a str {
-    match lang {
-        1 => tw,
-        2 => en,
-        _ => zh,
     }
 }
 

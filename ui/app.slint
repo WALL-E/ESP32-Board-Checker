@@ -5,11 +5,57 @@ export struct PortEntry {
     description: string,
 }
 
+// ---------- 全局色板 ----------
+global Palette {
+    // 分层背景
+    out property <color> bg: #0b0f14;
+    out property <color> card: #161b22;
+    out property <color> card-border: #232b36;
+    out property <color> inset: #10151c;
+    out property <color> inset-border: #1d242e;
+    out property <color> selected-bg: #122033;
+    out property <color> selected-border: #2d6fd6;
+    // 文字
+    out property <color> text: #e6edf3;
+    out property <color> text-secondary: #c9d1d9;
+    out property <color> text-muted: #7d8590;
+    out property <color> text-dim: #5b6472;
+    // 按钮与强调色
+    out property <color> accent: #2563eb;
+    out property <color> accent-hover: #2f7fe0;
+    out property <color> accent-border: #2d6fd6;
+    out property <color> button-bg: #1b222c;
+    out property <color> button-hover: #232b36;
+    out property <color> button-border: #30363d;
+    out property <color> button-disabled: #1a2029;
+    out property <color> dot: #3b82f6;
+    out property <color> dot-inactive: #2b3441;
+    // 判定卡：可用
+    out property <color> ok-bg: #10261a;
+    out property <color> ok-border: #1f6b3f;
+    out property <color> ok-icon: #1f8a4c;
+    out property <color> ok-title: #3fb950;
+    out property <color> ok-reason: #9fcca8;
+    // 判定卡：不可用 / 失败
+    out property <color> bad-bg: #2a1416;
+    out property <color> bad-border: #7f2d33;
+    out property <color> bad-icon: #c0343c;
+    out property <color> bad-title: #f85149;
+    out property <color> bad-reason: #e3a3a3;
+    // 判定卡：检测中 / 未检测
+    out property <color> busy-bg: #101f2e;
+    out property <color> busy-border: #1f4c78;
+    out property <color> busy-icon: #2563eb;
+    out property <color> busy-title: #58a6ff;
+    out property <color> idle-icon: #262f3b;
+    out property <color> idle-title: #8b949e;
+}
+
 component Card inherits Rectangle {
-    background: #161b22;
+    background: Palette.card;
     border-radius: 14px;
     border-width: 1px;
-    border-color: #232b36;
+    border-color: Palette.card-border;
     clip: true;
 }
 
@@ -24,16 +70,16 @@ component ActionButton inherits Rectangle {
     height: 38px;
     border-radius: 9px;
     border-width: 1px;
-    border-color: root.primary ? #2d6fd6 : #30363d;
-    background: !root.active ? #1a2029
-        : root.primary ? (touch.has-hover ? #2f7fe0 : #2563eb)
-        : (touch.has-hover ? #232b36 : #1b222c);
+    border-color: root.primary ? Palette.accent-border : Palette.button-border;
+    background: !root.active ? Palette.button-disabled
+        : root.primary ? (touch.has-hover ? Palette.accent-hover : Palette.accent)
+        : (touch.has-hover ? Palette.button-hover : Palette.button-bg);
 
     Text {
         text: root.label;
         width: root.width;
         height: root.height;
-        color: root.active ? (root.primary ? #ffffff : #c9d1d9) : #5b6472;
+        color: root.active ? (root.primary ? #ffffff : Palette.text-secondary) : Palette.text-dim;
         font-size: 13px;
         font-weight: 600;
         horizontal-alignment: center;
@@ -59,14 +105,14 @@ component InfoRow inherits HorizontalLayout {
     Text {
         text: root.label;
         width: 88px;
-        color: #7d8590;
+        color: Palette.text-muted;
         font-size: 13px;
         vertical-alignment: center;
     }
 
     Text {
         text: root.value;
-        color: #e6edf3;
+        color: Palette.text;
         font-size: 13px;
         font-weight: 600;
         horizontal-stretch: 1;
@@ -75,12 +121,134 @@ component InfoRow inherits HorizontalLayout {
     }
 }
 
+// 串口列表中的一项
+component PortListItem inherits Rectangle {
+    in property <string> name;
+    in property <string> description;
+    in property <bool> selected;
+    in property <bool> active: true;
+    callback clicked();
+
+    height: 56px;
+    border-radius: 10px;
+    border-width: 1px;
+    background: root.selected ? Palette.selected-bg : Palette.inset;
+    border-color: root.selected ? Palette.selected-border : Palette.inset-border;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 10px;
+        cross-axis-alignment: center;
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 2px;
+            Text {
+                text: root.name;
+                color: Palette.text;
+                font-size: 13px;
+                font-weight: 600;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.description;
+                color: Palette.text-muted;
+                font-size: 11px;
+                overflow: elide;
+            }
+        }
+
+        Rectangle {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: root.selected ? Palette.dot : Palette.dot-inactive;
+        }
+    }
+
+    TouchArea {
+        width: 100%;
+        height: 100%;
+        enabled: root.active;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// 判定卡：kind 为 "idle" | "busy" | "ok" | "bad"
+component VerdictCard inherits Card {
+    in property <string> kind: "idle";
+    in property <string> verdict-title;
+    in property <string> verdict-reason;
+
+    property <bool> is-ok: kind == "ok";
+    property <bool> is-bad: kind == "bad";
+    property <bool> is-busy: kind == "busy";
+
+    height: 104px;
+    background: is-ok ? Palette.ok-bg : is-bad ? Palette.bad-bg : is-busy ? Palette.busy-bg : Palette.card;
+    border-color: is-ok ? Palette.ok-border : is-bad ? Palette.bad-border : is-busy ? Palette.busy-border : Palette.card-border;
+
+    HorizontalLayout {
+        padding: 18px;
+        spacing: 14px;
+        cross-axis-alignment: center;
+
+        Rectangle {
+            width: 44px;
+            height: 44px;
+            border-radius: 22px;
+            background: root.is-ok ? Palette.ok-icon
+                : root.is-bad ? Palette.bad-icon
+                : root.is-busy ? Palette.busy-icon
+                : Palette.idle-icon;
+
+            Text {
+                text: root.is-ok ? "✓" : root.is-bad ? "✕" : root.is-busy ? "…" : "?";
+                width: parent.width;
+                height: parent.height;
+                color: #ffffff;
+                font-size: 20px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 3px;
+
+            Text {
+                text: root.verdict-title;
+                color: root.is-ok ? Palette.ok-title
+                    : root.is-bad ? Palette.bad-title
+                    : root.is-busy ? Palette.busy-title
+                    : Palette.idle-title;
+                font-size: 17px;
+                font-weight: 700;
+            }
+            Text {
+                text: root.verdict-reason;
+                color: root.is-ok ? Palette.ok-reason
+                    : root.is-bad ? Palette.bad-reason
+                    : Palette.idle-title;
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+        }
+    }
+}
+
 export component AppWindow inherits Window {
     title: "ESP32 Board Checker";
     icon: @image-url("../logo.png");
     width: 940px;
     height: 720px;
-    background: #0b0f14;
+    background: Palette.bg;
     default-font-family: "Microsoft YaHei UI";
     default-font-size: 13px;
 
@@ -146,13 +314,13 @@ export component AppWindow inherits Window {
                 spacing: 4px;
                 Text {
                     text: "ESP32 Board Checker";
-                    color: #e6edf3;
+                    color: Palette.text;
                     font-size: 24px;
                     font-weight: 700;
                 }
                 Text {
                     text: root.t-subtitle;
-                    color: #7d8590;
+                    color: Palette.text-muted;
                     font-size: 12px;
                 }
             }
@@ -185,7 +353,7 @@ export component AppWindow inherits Window {
 
                         Text {
                             text: root.t-ports-title;
-                            color: #e6edf3;
+                            color: Palette.text;
                             font-size: 15px;
                             font-weight: 600;
                             vertical-alignment: center;
@@ -203,23 +371,23 @@ export component AppWindow inherits Window {
 
                     if root.ports.length == 0 : Rectangle {
                         vertical-stretch: 1;
-                        background: #10151c;
+                        background: Palette.inset;
                         border-radius: 10px;
                         border-width: 1px;
-                        border-color: #1d242e;
+                        border-color: Palette.inset-border;
 
                         VerticalLayout {
                             alignment: center;
                             spacing: 6px;
                             Text {
                                 text: root.t-empty-title;
-                                color: #7d8590;
+                                color: Palette.text-muted;
                                 font-size: 13px;
                                 horizontal-alignment: center;
                             }
                             Text {
                                 text: root.t-empty-hint;
-                                color: #5b6472;
+                                color: Palette.text-dim;
                                 font-size: 11px;
                                 horizontal-alignment: center;
                             }
@@ -232,63 +400,19 @@ export component AppWindow inherits Window {
                         VerticalLayout {
                             spacing: 8px;
 
-                            for entry[idx] in root.ports : Rectangle {
-                                height: 56px;
-                                border-radius: 10px;
-                                border-width: 1px;
-                                background: idx == root.selected-index ? #122033 : #10151c;
-                                border-color: idx == root.selected-index ? #2d6fd6 : #1d242e;
-
-                                HorizontalLayout {
-                                    padding-left: 12px;
-                                    padding-right: 12px;
-                                    padding-top: 8px;
-                                    padding-bottom: 8px;
-                                    spacing: 10px;
-                                    cross-axis-alignment: center;
-
-                                    VerticalLayout {
-                                        horizontal-stretch: 1;
-                                        spacing: 2px;
-                                        Text {
-                                            text: entry.name;
-                                            color: #e6edf3;
-                                            font-size: 13px;
-                                            font-weight: 600;
-                                            vertical-alignment: center;
-                                        }
-                                        Text {
-                                            text: entry.description;
-                                            color: #7d8590;
-                                            font-size: 11px;
-                                            overflow: elide;
-                                        }
-                                    }
-
-                                    Rectangle {
-                                        width: 8px;
-                                        height: 8px;
-                                        border-radius: 4px;
-                                        background: idx == root.selected-index ? #3b82f6 : #2b3441;
-                                    }
-                                }
-
-                                TouchArea {
-                                    width: 100%;
-                                    height: 100%;
-                                    enabled: !root.busy;
-                                    mouse-cursor: pointer;
-                                    clicked => {
-                                        root.select-port(idx);
-                                    }
-                                }
+                            for entry[idx] in root.ports : PortListItem {
+                                name: entry.name;
+                                description: entry.description;
+                                selected: idx == root.selected-index;
+                                active: !root.busy;
+                                clicked => { root.select-port(idx); }
                             }
                         }
                     }
 
                     Text {
                         text: root.t-list-hint;
-                        color: #5b6472;
+                        color: Palette.text-dim;
                         font-size: 11px;
                     }
                 }
@@ -320,13 +444,13 @@ export component AppWindow inherits Window {
                                 spacing: 2px;
                                 Text {
                                     text: root.selected-port-name;
-                                    color: #c9d1d9;
+                                    color: Palette.text-secondary;
                                     font-size: 13px;
                                     font-weight: 600;
                                 }
                                 Text {
                                     text: root.status-text;
-                                    color: #7d8590;
+                                    color: Palette.text-muted;
                                     font-size: 11px;
                                     overflow: elide;
                                 }
@@ -344,7 +468,7 @@ export component AppWindow inherits Window {
 
                         Text {
                             text: root.t-info-title;
-                            color: #e6edf3;
+                            color: Palette.text;
                             font-size: 15px;
                             font-weight: 600;
                         }
@@ -363,72 +487,10 @@ export component AppWindow inherits Window {
                 }
 
                 // ===== Verdict =====
-                Card {
-                    height: 104px;
-                    background: root.verdict-kind == "ok" ? #10261a
-                        : root.verdict-kind == "bad" ? #2a1416
-                        : root.verdict-kind == "busy" ? #101f2e
-                        : #161b22;
-                    border-color: root.verdict-kind == "ok" ? #1f6b3f
-                        : root.verdict-kind == "bad" ? #7f2d33
-                        : root.verdict-kind == "busy" ? #1f4c78
-                        : #232b36;
-
-                    HorizontalLayout {
-                        padding-left: 18px;
-                        padding-right: 18px;
-                        padding-top: 18px;
-                        padding-bottom: 18px;
-                        spacing: 14px;
-                        cross-axis-alignment: center;
-
-                        Rectangle {
-                            width: 44px;
-                            height: 44px;
-                            border-radius: 22px;
-                            background: root.verdict-kind == "ok" ? #1f8a4c
-                                : root.verdict-kind == "bad" ? #c0343c
-                                : root.verdict-kind == "busy" ? #2563eb
-                                : #262f3b;
-
-                            Text {
-                                text: root.verdict-kind == "ok" ? "✓"
-                                    : root.verdict-kind == "bad" ? "✕"
-                                    : root.verdict-kind == "busy" ? "…"
-                                    : "?";
-                                width: parent.width;
-                                height: parent.height;
-                                color: #ffffff;
-                                font-size: 20px;
-                                font-weight: 700;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
-                            }
-                        }
-
-                        VerticalLayout {
-                            horizontal-stretch: 1;
-                            spacing: 3px;
-
-                            Text {
-                                text: root.verdict-title;
-                                color: root.verdict-kind == "ok" ? #3fb950
-                                    : root.verdict-kind == "bad" ? #f85149
-                                    : root.verdict-kind == "busy" ? #58a6ff
-                                    : #8b949e;
-                                font-size: 17px;
-                                font-weight: 700;
-                            }
-                            Text {
-                                text: root.verdict-reason;
-                                color: root.verdict-kind == "ok" ? #9fcca8
-                                    : root.verdict-kind == "bad" ? #e3a3a3
-                                    : #8b949e;
-                                font-size: 11px;
-                                wrap: word-wrap;
-                            }
-                        }
-                    }
+                VerdictCard {
+                    kind: root.verdict-kind;
+                    verdict-title: root.verdict-title;
+                    verdict-reason: root.verdict-reason;
                 }
             }
         }
