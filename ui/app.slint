@@ -1,253 +1,19 @@
 import { ComboBox, ScrollView } from "std-widgets.slint";
+import { Palette, Translator, Card, Divider, ActionButton, InfoRow, PortListItem, VerdictCard } from "components.slint";
 
 export struct PortEntry {
     name: string,
     description: string,
 }
 
-// ---------- 全局色板 ----------
-global Palette {
-    // 分层背景
-    out property <color> bg: #0b0f14;
-    out property <color> card: #161b22;
-    out property <color> card-border: #232b36;
-    out property <color> inset: #10151c;
-    out property <color> inset-border: #1d242e;
-    out property <color> selected-bg: #122033;
-    out property <color> selected-border: #2d6fd6;
-    // 文字
-    out property <color> text: #e6edf3;
-    out property <color> text-secondary: #c9d1d9;
-    out property <color> text-muted: #7d8590;
-    out property <color> text-dim: #5b6472;
-    // 按钮与强调色
-    out property <color> accent: #2563eb;
-    out property <color> accent-hover: #2f7fe0;
-    out property <color> accent-border: #2d6fd6;
-    out property <color> button-bg: #1b222c;
-    out property <color> button-hover: #232b36;
-    out property <color> button-border: #30363d;
-    out property <color> button-disabled: #1a2029;
-    out property <color> dot: #3b82f6;
-    out property <color> dot-inactive: #2b3441;
-    // 判定卡：可用
-    out property <color> ok-bg: #10261a;
-    out property <color> ok-border: #1f6b3f;
-    out property <color> ok-icon: #1f8a4c;
-    out property <color> ok-title: #3fb950;
-    out property <color> ok-reason: #9fcca8;
-    // 判定卡：不可用 / 失败
-    out property <color> bad-bg: #2a1416;
-    out property <color> bad-border: #7f2d33;
-    out property <color> bad-icon: #c0343c;
-    out property <color> bad-title: #f85149;
-    out property <color> bad-reason: #e3a3a3;
-    // 判定卡：检测中 / 未检测
-    out property <color> busy-bg: #101f2e;
-    out property <color> busy-border: #1f4c78;
-    out property <color> busy-icon: #2563eb;
-    out property <color> busy-title: #58a6ff;
-    out property <color> idle-icon: #262f3b;
-    out property <color> idle-title: #8b949e;
-}
-
-component Card inherits Rectangle {
-    background: Palette.card;
-    border-radius: 14px;
-    border-width: 1px;
-    border-color: Palette.card-border;
-    clip: true;
-}
-
-component ActionButton inherits Rectangle {
-    in property <string> label;
-    in property <bool> active: true;
-    in property <bool> primary: false;
-    in property <length> button-width: 96px;
-    callback clicked();
-
-    width: button-width;
-    height: 38px;
-    border-radius: 9px;
-    border-width: 1px;
-    border-color: root.primary ? Palette.accent-border : Palette.button-border;
-    background: !root.active ? Palette.button-disabled
-        : root.primary ? (touch.has-hover ? Palette.accent-hover : Palette.accent)
-        : (touch.has-hover ? Palette.button-hover : Palette.button-bg);
-
-    Text {
-        text: root.label;
-        width: root.width;
-        height: root.height;
-        color: root.active ? (root.primary ? #ffffff : Palette.text-secondary) : Palette.text-dim;
-        font-size: 13px;
-        font-weight: 600;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-
-    touch := TouchArea {
-        width: 100%;
-        height: 100%;
-        enabled: root.active;
-        mouse-cursor: pointer;
-        clicked => { root.clicked(); }
-    }
-}
-
-component InfoRow inherits HorizontalLayout {
-    in property <string> label;
-    in property <string> value;
-
-    spacing: 12px;
-    alignment: start;
-
-    Text {
-        text: root.label;
-        width: 88px;
-        color: Palette.text-muted;
-        font-size: 13px;
-        vertical-alignment: center;
-    }
-
-    Text {
-        text: root.value;
-        color: Palette.text;
-        font-size: 13px;
-        font-weight: 600;
-        horizontal-stretch: 1;
-        wrap: word-wrap;
-        vertical-alignment: center;
-    }
-}
-
-// 串口列表中的一项
-component PortListItem inherits Rectangle {
-    in property <string> name;
-    in property <string> description;
-    in property <bool> selected;
-    in property <bool> active: true;
-    callback clicked();
-
-    height: 56px;
-    border-radius: 10px;
-    border-width: 1px;
-    background: root.selected ? Palette.selected-bg : Palette.inset;
-    border-color: root.selected ? Palette.selected-border : Palette.inset-border;
-
-    HorizontalLayout {
-        padding-left: 12px;
-        padding-right: 12px;
-        padding-top: 8px;
-        padding-bottom: 8px;
-        spacing: 10px;
-        cross-axis-alignment: center;
-
-        VerticalLayout {
-            horizontal-stretch: 1;
-            spacing: 2px;
-            Text {
-                text: root.name;
-                color: Palette.text;
-                font-size: 13px;
-                font-weight: 600;
-                vertical-alignment: center;
-            }
-            Text {
-                text: root.description;
-                color: Palette.text-muted;
-                font-size: 11px;
-                overflow: elide;
-            }
-        }
-
-        Rectangle {
-            width: 8px;
-            height: 8px;
-            border-radius: 4px;
-            background: root.selected ? Palette.dot : Palette.dot-inactive;
-        }
-    }
-
-    TouchArea {
-        width: 100%;
-        height: 100%;
-        enabled: root.active;
-        mouse-cursor: pointer;
-        clicked => { root.clicked(); }
-    }
-}
-
-// 判定卡：kind 为 "idle" | "busy" | "ok" | "bad"
-component VerdictCard inherits Card {
-    in property <string> kind: "idle";
-    in property <string> verdict-title;
-    in property <string> verdict-reason;
-
-    property <bool> is-ok: kind == "ok";
-    property <bool> is-bad: kind == "bad";
-    property <bool> is-busy: kind == "busy";
-
-    height: 104px;
-    background: is-ok ? Palette.ok-bg : is-bad ? Palette.bad-bg : is-busy ? Palette.busy-bg : Palette.card;
-    border-color: is-ok ? Palette.ok-border : is-bad ? Palette.bad-border : is-busy ? Palette.busy-border : Palette.card-border;
-
-    HorizontalLayout {
-        padding: 18px;
-        spacing: 14px;
-        cross-axis-alignment: center;
-
-        Rectangle {
-            width: 44px;
-            height: 44px;
-            border-radius: 22px;
-            background: root.is-ok ? Palette.ok-icon
-                : root.is-bad ? Palette.bad-icon
-                : root.is-busy ? Palette.busy-icon
-                : Palette.idle-icon;
-
-            Text {
-                text: root.is-ok ? "✓" : root.is-bad ? "✕" : root.is-busy ? "…" : "?";
-                width: parent.width;
-                height: parent.height;
-                color: #ffffff;
-                font-size: 20px;
-                font-weight: 700;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
-        }
-
-        VerticalLayout {
-            horizontal-stretch: 1;
-            spacing: 3px;
-
-            Text {
-                text: root.verdict-title;
-                color: root.is-ok ? Palette.ok-title
-                    : root.is-bad ? Palette.bad-title
-                    : root.is-busy ? Palette.busy-title
-                    : Palette.idle-title;
-                font-size: 17px;
-                font-weight: 700;
-            }
-            Text {
-                text: root.verdict-reason;
-                color: root.is-ok ? Palette.ok-reason
-                    : root.is-bad ? Palette.bad-reason
-                    : Palette.idle-title;
-                font-size: 11px;
-                wrap: word-wrap;
-            }
-        }
-    }
-}
-
 export component AppWindow inherits Window {
     title: "ESP32 Board Checker";
     icon: @image-url("../logo.png");
-    width: 940px;
-    height: 720px;
+    // 注意：min-width/min-height 不能与 width/height 同时设置（Slint 编译错误）
+    preferred-width: 940px;
+    preferred-height: 720px;
+    min-width: 900px;
+    min-height: 640px;
     background: Palette.bg;
     default-font-family: "Microsoft YaHei UI";
     default-font-size: 13px;
@@ -280,30 +46,30 @@ export component AppWindow inherits Window {
     callback apply-language();
 
     // ---- 界面文案（随 lang 切换）----
-    property <string> t-subtitle: lang == 2 ? "Scan serial ports · One-click check · Chip / MAC / Flash info" : lang == 1 ? "掃描串口 · 一鍵檢測 · 輸出晶片 / MAC / Flash 資訊" : "扫描串口 · 一键检测 · 输出芯片 / MAC / Flash 信息";
-    property <string> t-ports-title: lang == 2 ? "Serial Ports" : "串口列表";
-    property <string> t-refresh: lang == 2 ? "Refresh" : lang == 1 ? "重新整理" : "刷新";
-    property <string> t-empty-title: lang == 2 ? "No serial ports found" : lang == 1 ? "暫無可用串口" : "暂无可用串口";
-    property <string> t-empty-hint: lang == 2 ? "Connect the board via USB, then click Refresh" : lang == 1 ? "請連接開發板 USB 線後點擊重新整理" : "请连接开发板 USB 线后点击刷新";
+    property <string> t-subtitle: Translator.choose(root.lang, "扫描串口 · 一键检测 · 输出芯片 / MAC / Flash 信息", "掃描串口 · 一鍵檢測 · 輸出晶片 / MAC / Flash 資訊", "Scan serial ports · One-click check · Chip / MAC / Flash info");
+    property <string> t-ports-title: Translator.choose(root.lang, "串口列表", "串口列表", "Serial Ports");
+    property <string> t-refresh: Translator.choose(root.lang, "刷新", "重新整理", "Refresh");
+    property <string> t-empty-title: Translator.choose(root.lang, "暂无可用串口", "暫無可用串口", "No serial ports found");
+    property <string> t-empty-hint: Translator.choose(root.lang, "请连接开发板 USB 线后点击刷新", "請連接開發板 USB 線後點擊重新整理", "Connect the board via USB, then click Refresh");
     property <string> t-list-hint: ports.length == 0
-        ? (lang == 2 ? "Waiting for a device…" : lang == 1 ? "等待串口裝置接入" : "等待串口设备接入")
-        : (lang == 2 ? "Ports found — select one to check" : lang == 1 ? "已發現串口，請選擇後檢測" : "已发现串口，请选择后检测");
+        ? Translator.choose(root.lang, "等待串口设备接入", "等待串口裝置接入", "Waiting for a device…")
+        : Translator.choose(root.lang, "已发现串口，请选择后检测", "已發現串口，請選擇後檢測", "Ports found — select one to check");
     property <string> t-detect-button: busy
-        ? (lang == 2 ? "Checking…" : lang == 1 ? "檢測中…" : "检测中…")
-        : (lang == 2 ? "Check" : lang == 1 ? "一鍵檢測" : "一键检测");
-    property <string> t-info-title: lang == 2 ? "Device Info" : lang == 1 ? "裝置資訊" : "设备信息";
-    property <string> t-l-chip: lang == 2 ? "Chip" : lang == 1 ? "晶片型號" : "芯片型号";
-    property <string> t-l-rev: lang == 2 ? "Revision" : lang == 1 ? "晶片版本" : "芯片版本";
-    property <string> t-l-mac: lang == 2 ? "MAC" : lang == 1 ? "MAC 位址" : "MAC 地址";
-    property <string> t-l-flash: lang == 2 ? "Flash" : "Flash 容量";
-    property <string> t-l-xtal: lang == 2 ? "Crystal" : lang == 1 ? "晶振頻率" : "晶振频率";
-    property <string> t-l-features: lang == 2 ? "Features" : lang == 1 ? "晶片特性" : "芯片特性";
-    property <string> t-l-bridge: lang == 2 ? "USB Bridge" : "USB 桥接";
-    property <string> t-l-last: lang == 2 ? "Last Check" : lang == 1 ? "上次檢測" : "上次检测";
+        ? Translator.choose(root.lang, "检测中…", "檢測中…", "Checking…")
+        : Translator.choose(root.lang, "一键检测", "一鍵檢測", "Check");
+    property <string> t-info-title: Translator.choose(root.lang, "设备信息", "裝置資訊", "Device Info");
+    property <string> t-l-chip: Translator.choose(root.lang, "芯片型号", "晶片型號", "Chip");
+    property <string> t-l-rev: Translator.choose(root.lang, "芯片版本", "晶片版本", "Revision");
+    property <string> t-l-mac: Translator.choose(root.lang, "MAC 地址", "MAC 位址", "MAC");
+    property <string> t-l-flash: Translator.choose(root.lang, "Flash 容量", "Flash 容量", "Flash");
+    property <string> t-l-xtal: Translator.choose(root.lang, "晶振频率", "晶振頻率", "Crystal");
+    property <string> t-l-features: Translator.choose(root.lang, "芯片特性", "晶片特性", "Features");
+    property <string> t-l-bridge: Translator.choose(root.lang, "USB 桥接", "USB 橋接", "USB Bridge");
+    property <string> t-l-last: Translator.choose(root.lang, "上次检测", "上次檢測", "Last Check");
 
     VerticalLayout {
         padding: 24px;
-        spacing: 18px;
+        spacing: 16px;
 
         // ---------- Header ----------
         HorizontalLayout {
@@ -338,7 +104,7 @@ export component AppWindow inherits Window {
         // ---------- Body ----------
         HorizontalLayout {
             vertical-stretch: 1;
-            spacing: 18px;
+            spacing: 16px;
 
             // ===== Left: serial port list =====
             Card {
@@ -372,13 +138,13 @@ export component AppWindow inherits Window {
                     if root.ports.length == 0 : Rectangle {
                         vertical-stretch: 1;
                         background: Palette.inset;
-                        border-radius: 10px;
+                        border-radius: 8px;
                         border-width: 1px;
                         border-color: Palette.inset-border;
 
                         VerticalLayout {
                             alignment: center;
-                            spacing: 6px;
+                            spacing: 8px;
                             Text {
                                 text: root.t-empty-title;
                                 color: Palette.text-muted;
@@ -388,7 +154,7 @@ export component AppWindow inherits Window {
                             Text {
                                 text: root.t-empty-hint;
                                 color: Palette.text-dim;
-                                font-size: 11px;
+                                font-size: 12px;
                                 horizontal-alignment: center;
                             }
                         }
@@ -413,7 +179,7 @@ export component AppWindow inherits Window {
                     Text {
                         text: root.t-list-hint;
                         color: Palette.text-dim;
-                        font-size: 11px;
+                        font-size: 12px;
                     }
                 }
             }
@@ -451,7 +217,7 @@ export component AppWindow inherits Window {
                                 Text {
                                     text: root.status-text;
                                     color: Palette.text-muted;
-                                    font-size: 11px;
+                                    font-size: 12px;
                                     overflow: elide;
                                 }
                             }
@@ -473,13 +239,17 @@ export component AppWindow inherits Window {
                             font-weight: 600;
                         }
 
-                        InfoRow { label: root.t-l-chip; value: root.chip-text; }
+                        // 分组：芯片信息 / 存储 / 连接 / 记录
+                        InfoRow { label: root.t-l-chip; value: root.chip-text; strong: true; }
                         InfoRow { label: root.t-l-rev; value: root.revision-text; }
-                        InfoRow { label: root.t-l-mac; value: root.mac-text; }
-                        InfoRow { label: root.t-l-flash; value: root.flash-text; }
-                        InfoRow { label: root.t-l-xtal; value: root.crystal-text; }
+                        InfoRow { label: root.t-l-mac; value: root.mac-text; copyable: true; }
                         InfoRow { label: root.t-l-features; value: root.features-text; }
+                        InfoRow { label: root.t-l-xtal; value: root.crystal-text; }
+                        Divider {}
+                        InfoRow { label: root.t-l-flash; value: root.flash-text; }
+                        Divider {}
                         InfoRow { label: root.t-l-bridge; value: root.usb-bridge-text; }
+                        Divider {}
                         InfoRow { label: root.t-l-last; value: root.last-check-text; }
 
                         Rectangle { vertical-stretch: 1; }

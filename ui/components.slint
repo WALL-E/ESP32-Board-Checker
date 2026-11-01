@@ -1,0 +1,310 @@
+// 共享色板与基础 UI 组件
+
+// ---------- 全局色板 ----------
+// 中性深灰底 + 蓝色强调色；判定语义色与强调色相分离（busy 用琥珀色，避免与蓝色选中态混淆）
+export global Palette {
+    // 分层背景：bg < inset < card，明度阶梯拉开，弱化对边框线的依赖
+    out property <color> bg: #121212;
+    out property <color> inset: #18181a;
+    out property <color> inset-border: #26262a;
+    out property <color> card: #1f1f22;
+    out property <color> card-border: #2d2d31;
+    out property <color> selected-bg: #17263a;
+    out property <color> selected-border: #2d6fd6;
+    // 文字
+    out property <color> text: #ececee;
+    out property <color> text-secondary: #c7c7cc;
+    out property <color> text-muted: #9a9aa1;
+    out property <color> text-dim: #6b6b71;
+    // 按钮与强调色
+    out property <color> accent: #2563eb;
+    out property <color> accent-hover: #2f7fe0;
+    out property <color> accent-border: #2d6fd6;
+    out property <color> button-bg: #242427;
+    out property <color> button-hover: #2d2d31;
+    out property <color> button-border: #3a3a3f;
+    out property <color> button-disabled: #1a1a1c;
+    out property <color> dot: #3b82f6;
+    out property <color> dot-inactive: #3a3a3f;
+    // 判定语义色：icon 为图标底色，accent 为色条/标题色
+    out property <color> ok: #1f8a4c;
+    out property <color> ok-accent: #3fb950;
+    out property <color> bad: #c0343c;
+    out property <color> bad-accent: #f85149;
+    out property <color> busy: #b45309;
+    out property <color> busy-accent: #f59e0b;
+    out property <color> idle-icon: #35353a;
+    out property <color> idle-accent: #7a7a80;
+}
+
+// 三选一文案：lang 0 = 简体中文，1 = 繁体中文，2 = English
+export global Translator {
+    public pure function choose(lang: int, zh: string, tw: string, en: string) -> string {
+        return lang == 2 ? en : lang == 1 ? tw : zh;
+    }
+}
+
+export component Card inherits Rectangle {
+    background: Palette.card;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: Palette.card-border;
+    clip: true;
+}
+
+// 细分隔线：用于设备信息分组
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Palette.inset-border;
+}
+
+export component ActionButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> active: true;
+    in property <bool> primary: false;
+    in property <length> button-width: 96px;
+    callback clicked();
+
+    width: button-width;
+    height: 38px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: root.primary ? Palette.accent-border : Palette.button-border;
+    background: !root.active ? Palette.button-disabled
+        : root.primary ? (touch.has-hover ? Palette.accent-hover : Palette.accent)
+        : (touch.has-hover ? Palette.button-hover : Palette.button-bg);
+
+    animate background, border-color { duration: 150ms; }
+
+    Text {
+        text: root.label;
+        width: root.width;
+        height: root.height;
+        color: root.active ? (root.primary ? #ffffff : Palette.text-secondary) : Palette.text-dim;
+        font-size: 13px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        enabled: root.active;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// 设备信息行。strong: 值加粗（重点信息）；copyable: 只读可选中复制（等宽字体，用于 MAC）
+export component InfoRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+    in property <bool> strong: false;
+    in property <bool> copyable: false;
+
+    spacing: 12px;
+    alignment: start;
+
+    Text {
+        text: root.label;
+        width: 88px;
+        color: Palette.text-muted;
+        font-size: 13px;
+        vertical-alignment: center;
+    }
+
+    if !root.copyable : Text {
+        text: root.value;
+        color: Palette.text;
+        font-size: 13px;
+        font-weight: root.strong ? 700 : 400;
+        horizontal-stretch: 1;
+        wrap: word-wrap;
+        vertical-alignment: center;
+    }
+
+    if root.copyable : TextInput {
+        text: root.value;
+        read-only: true;
+        color: Palette.text;
+        font-size: 13px;
+        font-weight: 600;
+        font-family: "Cascadia Mono";
+        horizontal-stretch: 1;
+        wrap: word-wrap;
+    }
+}
+
+// 串口列表中的一项
+export component PortListItem inherits Rectangle {
+    in property <string> name;
+    in property <string> description;
+    in property <bool> selected;
+    in property <bool> active: true;
+    callback clicked();
+
+    height: 56px;
+    border-radius: 8px;
+    border-width: 1px;
+    background: root.selected ? Palette.selected-bg : touch.has-hover ? Palette.button-hover : Palette.inset;
+    border-color: root.selected ? Palette.selected-border : Palette.inset-border;
+
+    animate background, border-color { duration: 120ms; }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 10px;
+        cross-axis-alignment: center;
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 2px;
+            Text {
+                text: root.name;
+                color: Palette.text;
+                font-size: 13px;
+                font-weight: 600;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.description;
+                color: Palette.text-muted;
+                font-size: 12px;
+                overflow: elide;
+            }
+        }
+
+        Rectangle {
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: root.selected ? Palette.dot : Palette.dot-inactive;
+            animate background { duration: 120ms; }
+        }
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        enabled: root.active;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// 判定卡：kind 为 "idle" | "busy" | "ok" | "bad"
+// 卡片底色恒定，通过左侧色条 + 图标颜色表达状态，避免整卡换色的跳跃感
+export component VerdictCard inherits Card {
+    in property <string> kind: "idle";
+    in property <string> verdict-title;
+    in property <string> verdict-reason;
+
+    property <bool> is-ok: kind == "ok";
+    property <bool> is-bad: kind == "bad";
+    property <bool> is-busy: kind == "busy";
+    property <bool> is-idle: !is-ok && !is-bad && !is-busy;
+
+    property <color> state-accent: is-ok ? Palette.ok-accent
+        : is-bad ? Palette.bad-accent
+        : is-busy ? Palette.busy-accent
+        : Palette.idle-accent;
+    property <color> state-icon-bg: is-ok ? Palette.ok
+        : is-bad ? Palette.bad
+        : is-busy ? Palette.busy
+        : Palette.idle-icon;
+
+    min-height: 96px;
+
+    // 左侧状态色条
+    Rectangle {
+        x: 0;
+        width: 4px;
+        height: parent.height;
+        background: root.state-accent;
+        animate background { duration: 200ms; }
+    }
+
+    HorizontalLayout {
+        padding: 16px;
+        padding-left: 20px;
+        spacing: 14px;
+        cross-axis-alignment: center;
+
+        // 状态图标圆
+        Rectangle {
+            width: 44px;
+            height: 44px;
+            border-radius: 22px;
+            background: root.state-icon-bg;
+            animate background { duration: 200ms; }
+
+            if root.is-ok : Image {
+                source: @image-url("icons/check.svg");
+                width: 22px;
+                height: 22px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                colorize: #ffffff;
+            }
+
+            if root.is-bad : Image {
+                source: @image-url("icons/close.svg");
+                width: 22px;
+                height: 22px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                colorize: #ffffff;
+            }
+
+            // busy：三个错峰脉动的圆点，动画元素仅在 busy 时存在
+            if root.is-busy : HorizontalLayout {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                spacing: 4px;
+
+                for i in 3 : Rectangle {
+                    width: 5px;
+                    height: 5px;
+                    border-radius: 2.5px;
+                    background: #ffffff;
+                    opacity: 0.3 + 0.7 * (0.5 + 0.5 * sin(360deg * animation-tick() / 1.2s + i * 120deg));
+                }
+            }
+
+            // idle：空心圆，中性表达「未检测」
+            if root.is-idle : Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                border-width: 2px;
+                border-color: Palette.text-muted;
+                background: transparent;
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 4px;
+
+            Text {
+                text: root.verdict-title;
+                color: root.state-accent;
+                font-size: 17px;
+                font-weight: 700;
+                animate color { duration: 200ms; }
+            }
+            Text {
+                text: root.verdict-reason;
+                color: Palette.text-secondary;
+                font-size: 12px;
+                wrap: word-wrap;
+            }
+        }
+    }
+}

@@ -5,7 +5,7 @@ use espflash::flasher::{FlashSize, Flasher};
 use espflash::target::Chip;
 use serialport::{FlowControl, SerialPortInfo, SerialPortType, UsbPortInfo};
 
-use crate::i18n::{tr, trf};
+use crate::i18n::{tr, trf, Lang};
 
 /// 一个可选的串口
 pub struct PortItem {
@@ -28,7 +28,7 @@ pub struct BoardReport {
 }
 
 /// 扫描系统串口，并把桥接芯片信息作为描述展示
-pub fn scan_ports(lang: u8) -> Vec<PortItem> {
+pub fn scan_ports(lang: Lang) -> Vec<PortItem> {
     let mut ports = serialport::available_ports().unwrap_or_default();
     ports.sort_by_key(|info| port_sort_key(&info.port_name));
 
@@ -42,7 +42,7 @@ pub fn scan_ports(lang: u8) -> Vec<PortItem> {
 }
 
 /// 一键检测：进入下载模式 -> 识别芯片 -> 读取 MAC / Flash 等信息 -> 复位回正常模式
-pub fn check_port(port_name: &str, lang: u8) -> Result<BoardReport, String> {
+pub fn check_port(port_name: &str, lang: Lang) -> Result<BoardReport, String> {
     let usb_info = usb_info_for(port_name);
     let usb_bridge = bridge_text(&usb_info, lang);
 
@@ -98,7 +98,7 @@ pub fn check_port(port_name: &str, lang: u8) -> Result<BoardReport, String> {
     })?;
 
     let flash = flash_text(device.flash_size, lang);
-    let (usable, verdict_reason) = judge(&device.mac_address, &flash, device.flash_size.size(), lang);
+    let (usable, verdict_reason) = judge(device.mac_address.as_deref(), device.flash_size, lang);
 
     let features = if device.features.is_empty() {
         tr(lang, "未报告", "未報告", "Not reported").to_string()
@@ -125,7 +125,10 @@ pub fn check_port(port_name: &str, lang: u8) -> Result<BoardReport, String> {
 }
 
 /// 判定板子是否可用，并给出理由
-fn judge(mac: &Option<String>, flash: &str, flash_bytes: u32, lang: u8) -> (bool, String) {
+fn judge(mac: Option<&str>, flash_size: FlashSize, lang: Lang) -> (bool, String) {
+    let flash = flash_text(flash_size, lang);
+    let flash_bytes = flash_size.size();
+
     let Some(mac) = mac else {
         return (
             false,
@@ -176,7 +179,7 @@ fn judge(mac: &Option<String>, flash: &str, flash_bytes: u32, lang: u8) -> (bool
 }
 
 fn chip_name(chip: Chip) -> String {
-    match chip {
+    let name = match chip {
         Chip::Esp32 => "ESP32",
         Chip::Esp32c2 => "ESP32-C2",
         Chip::Esp32c3 => "ESP32-C3",
@@ -190,11 +193,11 @@ fn chip_name(chip: Chip) -> String {
         Chip::Esp32s3 => "ESP32-S3",
         Chip::Esp32s31 => "ESP32-S31",
         _ => return chip.to_string(),
-    }
-    .to_string()
+    };
+    name.to_string()
 }
 
-fn flash_text(size: FlashSize, lang: u8) -> String {
+fn flash_text(size: FlashSize, lang: Lang) -> String {
     let bytes = size.size();
     if bytes >= 1024 * 1024 {
         trf!(
@@ -228,7 +231,7 @@ fn mac_is_valid(mac: &str) -> bool {
     digits.len() == 12 && digits != "ffffffffffff" && digits != "000000000000"
 }
 
-fn describe(info: &SerialPortInfo, lang: u8) -> String {
+fn describe(info: &SerialPortInfo, lang: Lang) -> String {
     match &info.port_type {
         // 驱动上报的 product 字符串通常是英文，改用本地化的桥接芯片名
         SerialPortType::UsbPort(usb) => bridge_text(usb, lang),
@@ -239,7 +242,7 @@ fn describe(info: &SerialPortInfo, lang: u8) -> String {
 }
 
 /// 根据 USB VID/PID 推断桥接芯片，如 "CP210x (10C4:EA60)"
-fn bridge_text(info: &UsbPortInfo, lang: u8) -> String {
+fn bridge_text(info: &UsbPortInfo, lang: Lang) -> String {
     if info.vid == 0 {
         return tr(lang, "非 USB 串口", "非 USB 串口", "Not a USB port").to_string();
     }

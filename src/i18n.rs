@@ -1,11 +1,30 @@
-//! 三语文案工具：lang 0 = 简体中文，1 = 繁体中文，2 = English
+//! 三语文案工具：用 Lang 枚举替代裸数字，避免调用方传错语言索引
+
+/// 界面语言，索引与 Slint 的 `lang` 属性一致
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Lang {
+    Simplified,
+    Traditional,
+    English,
+}
+
+impl Lang {
+    /// 由 Slint 的 `lang` 整型属性转换
+    pub const fn from_index(index: i32) -> Self {
+        match index {
+            1 => Self::Traditional,
+            2 => Self::English,
+            _ => Self::Simplified,
+        }
+    }
+}
 
 /// 按语言从三个现成文案中选择
-pub fn tr<'a>(lang: u8, zh: &'a str, tw: &'a str, en: &'a str) -> &'a str {
+pub fn tr<'a>(lang: Lang, zh: &'a str, tw: &'a str, en: &'a str) -> &'a str {
     match lang {
-        1 => tw,
-        2 => en,
-        _ => zh,
+        Lang::Traditional => tw,
+        Lang::English => en,
+        Lang::Simplified => zh,
     }
 }
 
@@ -17,9 +36,9 @@ pub fn tr<'a>(lang: u8, zh: &'a str, tw: &'a str, en: &'a str) -> &'a str {
 macro_rules! trf {
     ($lang:expr, $zh:literal, $tw:literal, $en:literal $(, $($arg:tt)*)?) => {
         match $lang {
-            1 => format!($tw $(, $($arg)*)?),
-            2 => format!($en $(, $($arg)*)?),
-            _ => format!($zh $(, $($arg)*)?),
+            $crate::i18n::Lang::Traditional => format!($tw $(, $($arg)*)?),
+            $crate::i18n::Lang::English => format!($en $(, $($arg)*)?),
+            $crate::i18n::Lang::Simplified => format!($zh $(, $($arg)*)?),
         }
     };
 }
