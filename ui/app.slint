@@ -1,0 +1,407 @@
+import { ScrollView } from "std-widgets.slint";
+
+export struct PortEntry {
+    name: string,
+    description: string,
+}
+
+component Card inherits Rectangle {
+    background: #161b22;
+    border-radius: 14px;
+    border-width: 1px;
+    border-color: #232b36;
+    clip: true;
+}
+
+component ActionButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> active: true;
+    in property <bool> primary: false;
+    in property <length> button-width: 96px;
+    callback clicked();
+
+    width: button-width;
+    height: 38px;
+    border-radius: 9px;
+    border-width: 1px;
+    border-color: root.primary ? #2d6fd6 : #30363d;
+    background: !root.active ? #1a2029
+        : root.primary ? (touch.has-hover ? #2f7fe0 : #2563eb)
+        : (touch.has-hover ? #232b36 : #1b222c);
+
+    Text {
+        text: root.label;
+        width: root.width;
+        height: root.height;
+        color: root.active ? (root.primary ? #ffffff : #c9d1d9) : #5b6472;
+        font-size: 13px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        enabled: root.active;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+component InfoRow inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> value;
+
+    spacing: 12px;
+    alignment: start;
+
+    Text {
+        text: root.label;
+        width: 88px;
+        color: #7d8590;
+        font-size: 13px;
+        vertical-alignment: center;
+    }
+
+    Text {
+        text: root.value;
+        color: #e6edf3;
+        font-size: 13px;
+        font-weight: 600;
+        horizontal-stretch: 1;
+        wrap: word-wrap;
+        vertical-alignment: center;
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "ESP32 Board Checker";
+    icon: @image-url("../logo.png");
+    width: 940px;
+    height: 720px;
+    background: #0b0f14;
+    default-font-family: "Microsoft YaHei UI";
+    default-font-size: 13px;
+
+    in property <[PortEntry]> ports;
+    in-out property <int> selected-index: 0;
+    in property <string> selected-port-name: "未选择串口";
+    in property <bool> busy: false;
+
+    in property <string> status-text: "就绪，请选择一个串口后开始检测";
+    in property <string> chip-text: "—";
+    in property <string> revision-text: "—";
+    in property <string> mac-text: "—";
+    in property <string> flash-text: "—";
+    in property <string> crystal-text: "—";
+    in property <string> features-text: "—";
+
+    // verdict-kind: "idle" | "busy" | "ok" | "bad"
+    in property <string> verdict-kind: "idle";
+    in property <string> verdict-title: "未检测";
+    in property <string> verdict-reason: "连接开发板后刷新串口，再点击「一键检测」。";
+
+    callback refresh-ports();
+    callback select-port(int);
+    callback detect();
+
+    VerticalLayout {
+        padding: 24px;
+        spacing: 18px;
+
+        // ---------- Header ----------
+        HorizontalLayout {
+            spacing: 12px;
+            cross-axis-alignment: center;
+
+            VerticalLayout {
+                spacing: 4px;
+                Text {
+                    text: "ESP32 Board Checker";
+                    color: #e6edf3;
+                    font-size: 24px;
+                    font-weight: 700;
+                }
+                Text {
+                    text: "扫描串口 · 一键检测 · 输出芯片 / MAC / Flash 信息";
+                    color: #7d8590;
+                    font-size: 12px;
+                }
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+        }
+
+        // ---------- Body ----------
+        HorizontalLayout {
+            vertical-stretch: 1;
+            spacing: 18px;
+
+            // ===== Left: serial port list =====
+            Card {
+                width: 350px;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 12px;
+
+                    HorizontalLayout {
+                        spacing: 8px;
+
+                        Text {
+                            text: "串口列表";
+                            color: #e6edf3;
+                            font-size: 15px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+
+                        Rectangle { horizontal-stretch: 1; }
+
+                        ActionButton {
+                            label: "刷新";
+                            button-width: 68px;
+                            active: !root.busy;
+                            clicked => { root.refresh-ports(); }
+                        }
+                    }
+
+                    if root.ports.length == 0 : Rectangle {
+                        vertical-stretch: 1;
+                        background: #10151c;
+                        border-radius: 10px;
+                        border-width: 1px;
+                        border-color: #1d242e;
+
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 6px;
+                            Text {
+                                text: "暂无可用串口";
+                                color: #7d8590;
+                                font-size: 13px;
+                                horizontal-alignment: center;
+                            }
+                            Text {
+                                text: "请连接开发板 USB 线后点击刷新";
+                                color: #5b6472;
+                                font-size: 11px;
+                                horizontal-alignment: center;
+                            }
+                        }
+                    }
+
+                    if root.ports.length > 0 : ScrollView {
+                        vertical-stretch: 1;
+
+                        VerticalLayout {
+                            spacing: 8px;
+
+                            for entry[idx] in root.ports : Rectangle {
+                                height: 56px;
+                                border-radius: 10px;
+                                border-width: 1px;
+                                background: idx == root.selected-index ? #122033 : #10151c;
+                                border-color: idx == root.selected-index ? #2d6fd6 : #1d242e;
+
+                                HorizontalLayout {
+                                    padding-left: 12px;
+                                    padding-right: 12px;
+                                    padding-top: 8px;
+                                    padding-bottom: 8px;
+                                    spacing: 10px;
+                                    cross-axis-alignment: center;
+
+                                    VerticalLayout {
+                                        horizontal-stretch: 1;
+                                        spacing: 2px;
+                                        Text {
+                                            text: entry.name;
+                                            color: #e6edf3;
+                                            font-size: 13px;
+                                            font-weight: 600;
+                                            vertical-alignment: center;
+                                        }
+                                        Text {
+                                            text: entry.description;
+                                            color: #7d8590;
+                                            font-size: 11px;
+                                            overflow: elide;
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: 8px;
+                                        height: 8px;
+                                        border-radius: 4px;
+                                        background: idx == root.selected-index ? #3b82f6 : #2b3441;
+                                    }
+                                }
+
+                                TouchArea {
+                                    width: 100%;
+                                    height: 100%;
+                                    enabled: !root.busy;
+                                    mouse-cursor: pointer;
+                                    clicked => {
+                                        root.select-port(idx);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Text {
+                        text: root.ports.length == 0 ? "等待串口设备接入" : "已发现串口，请选择后检测";
+                        color: #5b6472;
+                        font-size: 11px;
+                    }
+                }
+            }
+
+            // ===== Right: detection =====
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 16px;
+
+                Card {
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 12px;
+
+                        Text {
+                            text: "一键检测";
+                            color: #e6edf3;
+                            font-size: 15px;
+                            font-weight: 600;
+                        }
+
+                        HorizontalLayout {
+                            spacing: 12px;
+
+                            ActionButton {
+                                label: root.busy ? "检测中…" : "一键检测";
+                                primary: true;
+                                button-width: 140px;
+                                active: !root.busy && root.ports.length > 0;
+                                clicked => { root.detect(); }
+                            }
+
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                spacing: 2px;
+                                Text {
+                                    text: root.selected-port-name;
+                                    color: #c9d1d9;
+                                    font-size: 13px;
+                                    font-weight: 600;
+                                }
+                                Text {
+                                    text: root.status-text;
+                                    color: #7d8590;
+                                    font-size: 11px;
+                                    overflow: elide;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Card {
+                    vertical-stretch: 1;
+
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 14px;
+
+                        Text {
+                            text: "设备信息";
+                            color: #e6edf3;
+                            font-size: 15px;
+                            font-weight: 600;
+                        }
+
+                        InfoRow { label: "芯片型号"; value: root.chip-text; }
+                        InfoRow { label: "芯片版本"; value: root.revision-text; }
+                        InfoRow { label: "MAC 地址"; value: root.mac-text; }
+                        InfoRow { label: "Flash 容量"; value: root.flash-text; }
+                        InfoRow { label: "晶振频率"; value: root.crystal-text; }
+                        InfoRow { label: "芯片特性"; value: root.features-text; }
+
+                        Rectangle { vertical-stretch: 1; }
+                    }
+                }
+
+                // ===== Verdict =====
+                Card {
+                    height: 104px;
+                    background: root.verdict-kind == "ok" ? #10261a
+                        : root.verdict-kind == "bad" ? #2a1416
+                        : root.verdict-kind == "busy" ? #101f2e
+                        : #161b22;
+                    border-color: root.verdict-kind == "ok" ? #1f6b3f
+                        : root.verdict-kind == "bad" ? #7f2d33
+                        : root.verdict-kind == "busy" ? #1f4c78
+                        : #232b36;
+
+                    HorizontalLayout {
+                        padding-left: 18px;
+                        padding-right: 18px;
+                        padding-top: 18px;
+                        padding-bottom: 18px;
+                        spacing: 14px;
+                        cross-axis-alignment: center;
+
+                        Rectangle {
+                            width: 44px;
+                            height: 44px;
+                            border-radius: 22px;
+                            background: root.verdict-kind == "ok" ? #1f8a4c
+                                : root.verdict-kind == "bad" ? #c0343c
+                                : root.verdict-kind == "busy" ? #2563eb
+                                : #262f3b;
+
+                            Text {
+                                text: root.verdict-kind == "ok" ? "✓"
+                                    : root.verdict-kind == "bad" ? "✕"
+                                    : root.verdict-kind == "busy" ? "…"
+                                    : "?";
+                                width: parent.width;
+                                height: parent.height;
+                                color: #ffffff;
+                                font-size: 20px;
+                                font-weight: 700;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            spacing: 3px;
+
+                            Text {
+                                text: root.verdict-title;
+                                color: root.verdict-kind == "ok" ? #3fb950
+                                    : root.verdict-kind == "bad" ? #f85149
+                                    : root.verdict-kind == "busy" ? #58a6ff
+                                    : #8b949e;
+                                font-size: 17px;
+                                font-weight: 700;
+                            }
+                            Text {
+                                text: root.verdict-reason;
+                                color: root.verdict-kind == "ok" ? #9fcca8
+                                    : root.verdict-kind == "bad" ? #e3a3a3
+                                    : #8b949e;
+                                font-size: 11px;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

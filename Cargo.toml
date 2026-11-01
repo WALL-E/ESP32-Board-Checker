@@ -1,0 +1,19 @@
+[package]
+name = "esp32-board-checker"
+version = "0.1.0"
+edition = "2021"
+description = "ESP32 Board Checker - scan serial ports and inspect ESP chips"
+
+[dependencies]
+slint = "1.18"
+serialport = "4.10"
+espflash = { version = "4.7", default-features = false, features = ["serialport"] }
+
+[build-dependencies]
+slint-build = "1.18"
+winresource = "0.1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
