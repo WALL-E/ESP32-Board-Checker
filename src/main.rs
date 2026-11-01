@@ -26,7 +26,6 @@ fn tr<'a>(lang: u8, zh: &'a str, tw: &'a str, en: &'a str) -> &'a str {
 struct LastDisplay {
     result: Result<detector::BoardReport, String>,
     checked_at: String,
-    from_cache: bool,
 }
 
 fn main() -> Result<(), slint::PlatformError> {
@@ -65,16 +64,15 @@ fn main() -> Result<(), slint::PlatformError> {
                     *last_for_select.lock().unwrap() = Some(LastDisplay {
                         result: Ok(cached.report.clone()),
                         checked_at: checked_at.clone(),
-                        from_cache: true,
                     });
                     apply_result(&ui, Ok(cached.report), Duration::ZERO, &checked_at, true, lang);
                 } else {
                     *last_for_select.lock().unwrap() = None;
                     clear_result(&ui, lang);
                     let msg = match lang {
-                        1 => format!("已選擇 {}，點擊「一鍵檢測」開始", entry.name),
-                        2 => format!("Selected {} — click Check to start", entry.name),
-                        _ => format!("已选择 {}，点击「一键检测」开始", entry.name),
+                        1 => format!("已選擇 {}，點擊右側按鈕開始檢測", entry.name),
+                        2 => format!("Selected {} — click the button to start", entry.name),
+                        _ => format!("已选择 {}，点击右侧按钮开始检测", entry.name),
                     };
                     ui.set_status_text(msg.into());
                 }
@@ -141,7 +139,6 @@ fn main() -> Result<(), slint::PlatformError> {
                     *last_for_thread.lock().unwrap() = Some(LastDisplay {
                         result: result.clone(),
                         checked_at: checked_at.clone(),
-                        from_cache: false,
                     });
                     apply_result(&ui, result, elapsed, &checked_at, false, lang);
                 }
@@ -231,6 +228,7 @@ fn apply_result(
             ui.set_flash_text(report.flash.into());
             ui.set_crystal_text(report.crystal.into());
             ui.set_features_text(report.features.into());
+            ui.set_usb_bridge_text(report.usb_bridge.into());
             ui.set_last_check_text(checked_at.into());
             ui.set_verdict_kind((if report.usable { "ok" } else { "bad" }).into());
             ui.set_verdict_title(
@@ -245,9 +243,9 @@ fn apply_result(
             ui.set_verdict_reason(report.verdict_reason.into());
             let status = if from_cache {
                 match lang {
-                    1 => format!("上次檢測 {checked_at}，可點擊「一鍵檢測」重新檢測"),
-                    2 => format!("Last checked {checked_at} — click Check to re-run"),
-                    _ => format!("上次检测 {checked_at}，可点击「一键检测」重新检测"),
+                    1 => format!("上次檢測 {checked_at}，可點擊按鈕重新檢測"),
+                    2 => format!("Last checked {checked_at} — click the button to re-run"),
+                    _ => format!("上次检测 {checked_at}，可点击按钮重新检测"),
                 }
             } else {
                 match lang {
@@ -280,14 +278,15 @@ fn clear_result(ui: &AppWindow, lang: u8) {
     ui.set_flash_text("—".into());
     ui.set_crystal_text("—".into());
     ui.set_features_text("—".into());
+    ui.set_usb_bridge_text("—".into());
     ui.set_last_check_text("—".into());
     ui.set_verdict_kind("idle".into());
     ui.set_verdict_title(tr(lang, "未检测", "未檢測", "Not Checked").into());
     ui.set_verdict_reason(tr(
         lang,
-        "连接开发板后刷新串口，再点击「一键检测」。",
-        "連接開發板後重新整理串口，再點擊「一鍵檢測」。",
-        "Connect the board, refresh ports, then click Check.",
+        "连接开发板后刷新串口，再点击按钮开始检测。",
+        "連接開發板後重新整理串口，再點擊按鈕開始檢測。",
+        "Connect the board, refresh ports, then click the button to start.",
     ).into());
 }
 

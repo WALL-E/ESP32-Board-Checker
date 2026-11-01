@@ -20,6 +20,7 @@ pub struct BoardReport {
     pub flash: String,
     pub crystal: String,
     pub features: String,
+    pub usb_bridge: String,
     pub usable: bool,
     pub verdict_reason: String,
 }
@@ -41,6 +42,7 @@ pub fn scan_ports(lang: u8) -> Vec<PortItem> {
 /// 一键检测：进入下载模式 -> 识别芯片 -> 读取 MAC / Flash 等信息 -> 复位回正常模式
 pub fn check_port(port_name: &str, lang: u8) -> Result<BoardReport, String> {
     let usb_info = usb_info_for(port_name);
+    let usb_bridge = bridge_text(&usb_info, lang);
 
     let port = serialport::new(port_name, 115_200)
         .flow_control(FlowControl::None)
@@ -160,6 +162,7 @@ pub fn check_port(port_name: &str, lang: u8) -> Result<BoardReport, String> {
         flash,
         crystal: device.crystal_frequency.to_string(),
         features,
+        usb_bridge,
         usable,
         verdict_reason,
     })
@@ -213,16 +216,8 @@ fn mac_is_valid(mac: &str) -> bool {
 
 fn describe(info: &SerialPortInfo, lang: u8) -> String {
     match &info.port_type {
-        SerialPortType::UsbPort(usb) => {
-            let label = usb
-                .product
-                .clone()
-                .or_else(|| usb.manufacturer.clone())
-                .unwrap_or_else(|| {
-                    tr(lang, "USB 串口设备", "USB 串口裝置", "USB Serial Device").to_string()
-                });
-            format!("{label} · VID:PID {:04X}:{:04X}", usb.vid, usb.pid)
-        }
+        // 驱动上报的 product 字符串通常是英文，改用本地化的桥接芯片名
+        SerialPortType::UsbPort(usb) => bridge_text(usb, lang),
         SerialPortType::BluetoothPort => tr(lang, "蓝牙串口", "藍牙串口", "Bluetooth").to_string(),
         SerialPortType::PciPort => tr(lang, "PCI 串口", "PCI 串口", "PCI").to_string(),
         _ => tr(lang, "未知串口设备", "未知串口裝置", "Unknown Device").to_string(),
@@ -236,6 +231,26 @@ fn tr<'a>(lang: u8, zh: &'a str, tw: &'a str, en: &'a str) -> &'a str {
         2 => en,
         _ => zh,
     }
+}
+
+/// 根据 USB VID/PID 推断桥接芯片，如 "CP210x (10C4:EA60)"
+fn bridge_text(info: &UsbPortInfo, lang: u8) -> String {
+    if info.vid == 0 {
+        return tr(lang, "非 USB 串口", "非 USB 串口", "Not a USB port").to_string();
+    }
+
+    let name = match info.vid {
+        0x303A => tr(lang, "乐鑫原生 USB", "樂鑫原生 USB", "Espressif native USB").to_string(),
+        0x1A86 => "CH340/CH341".to_string(),
+        0x10C4 => "CP210x".to_string(),
+        0x0403 => "FTDI".to_string(),
+        0x067B => "PL2303".to_string(),
+        _ => info.manufacturer.clone().unwrap_or_else(|| {
+            tr(lang, "未知桥接芯片", "未知橋接晶片", "Unknown bridge").to_string()
+        }),
+    };
+
+    format!("{} ({:04X}:{:04X})", name, info.vid, info.pid)
 }
 
 fn usb_info_for(port_name: &str) -> UsbPortInfo {
