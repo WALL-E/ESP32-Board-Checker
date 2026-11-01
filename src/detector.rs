@@ -12,6 +12,7 @@ pub struct PortItem {
 }
 
 /// 一次检测得到的板子信息
+#[derive(Clone)]
 pub struct BoardReport {
     pub chip: String,
     pub revision: String,
@@ -24,7 +25,7 @@ pub struct BoardReport {
 }
 
 /// 扫描系统串口，并把 USB 设备的信息作为描述展示
-pub fn scan_ports() -> Vec<PortItem> {
+pub fn scan_ports(lang: u8) -> Vec<PortItem> {
     let mut ports = serialport::available_ports().unwrap_or_default();
     ports.sort_by_key(|info| port_sort_key(&info.port_name));
 
@@ -32,20 +33,24 @@ pub fn scan_ports() -> Vec<PortItem> {
         .iter()
         .map(|info| PortItem {
             name: info.port_name.clone(),
-            description: describe(&info),
+            description: describe(&info, lang),
         })
         .collect()
 }
 
 /// 一键检测：进入下载模式 -> 识别芯片 -> 读取 MAC / Flash 等信息 -> 复位回正常模式
-pub fn check_port(port_name: &str) -> Result<BoardReport, String> {
+pub fn check_port(port_name: &str, lang: u8) -> Result<BoardReport, String> {
     let usb_info = usb_info_for(port_name);
 
     let port = serialport::new(port_name, 115_200)
         .flow_control(FlowControl::None)
         .timeout(Duration::from_secs(3))
         .open_native()
-        .map_err(|e| format!("无法打开串口 {port_name}：{e}"))?;
+        .map_err(|e| match lang {
+            1 => format!("無法打開串口 {port_name}：{e}"),
+            2 => format!("Cannot open port {port_name}: {e}"),
+            _ => format!("无法打开串口 {port_name}：{e}"),
+        })?;
 
     let connection = Connection::new(
         port,
@@ -62,7 +67,11 @@ pub fn check_port(port_name: &str) -> Result<BoardReport, String> {
             let (error, mut connection) = *pair;
             // 连接失败时也尝试复位，避免板子停在下载模式
             let _ = connection.reset();
-            return Err(format!("未检测到 ESP 芯片（无法进入下载模式）：{error}"));
+            return Err(match lang {
+                1 => format!("未檢測到 ESP 晶片（無法進入下載模式）：{error}"),
+                2 => format!("No ESP chip detected (cannot enter download mode): {error}"),
+                _ => format!("未检测到 ESP 芯片（无法进入下载模式）：{error}"),
+            });
         }
     };
 
@@ -71,40 +80,72 @@ pub fn check_port(port_name: &str) -> Result<BoardReport, String> {
     // 检测完成后复位，让板子回到正常运行模式
     let _ = flasher.connection().reset_after(true, chip);
 
-    let device = device.map_err(|e| format!("芯片已连接，但读取设备信息失败：{e}"))?;
+    let device = device.map_err(|e| match lang {
+        1 => format!("晶片已連接，但讀取裝置資訊失敗：{e}"),
+        2 => format!("Chip connected, but failed to read device info: {e}"),
+        _ => format!("芯片已连接，但读取设备信息失败：{e}"),
+    })?;
 
     let mac = device.mac_address.clone();
-    let flash = flash_text(device.flash_size);
+    let flash = flash_text(device.flash_size, lang);
     let flash_bytes = device.flash_size.size();
     let mac_valid = mac.as_deref().map(mac_is_valid).unwrap_or(false);
 
     let (usable, verdict_reason) = if mac.is_none() {
         (
             false,
-            "未读取到 MAC 地址（芯片可能处于安全下载模式），无法确认板子状态。".to_string(),
+            tr(
+                lang,
+                "未读取到 MAC 地址（芯片可能处于安全下载模式），无法确认板子状态。",
+                "未讀取到 MAC 位址（晶片可能處於安全下載模式），無法確認板子狀態。",
+                "MAC address not read (chip may be in secure download mode); board status cannot be confirmed.",
+            )
+            .to_string(),
         )
     } else if !mac_valid {
         (
             false,
-            format!(
-                "MAC 地址异常（{}）：全 0 / 全 F 通常意味着芯片损坏或仿制芯片。",
-                mac.clone().unwrap_or_default()
-            ),
+            match lang {
+                1 => format!(
+                    "MAC 位址異常（{}）：全 0 / 全 F 通常表示晶片損壞或仿製晶片。",
+                    mac.clone().unwrap_or_default()
+                ),
+                2 => format!(
+                    "Abnormal MAC address ({}): all-zero or all-F usually indicates a damaged or counterfeit chip.",
+                    mac.clone().unwrap_or_default()
+                ),
+                _ => format!(
+                    "MAC 地址异常（{}）：全 0 / 全 F 通常意味着芯片损坏或仿制芯片。",
+                    mac.clone().unwrap_or_default()
+                ),
+            },
         )
     } else if flash_bytes < 1024 * 1024 {
         (
             false,
-            format!("Flash 容量仅 {flash}，低于常见应用的最低要求（1 MB）。"),
+            match lang {
+                1 => format!("Flash 容量僅 {flash}，低於常見應用的最低要求（1 MB）。"),
+                2 => format!(
+                    "Flash size is only {flash}, below the 1 MB minimum for typical applications."
+                ),
+                _ => format!("Flash 容量仅 {flash}，低于常见应用的最低要求（1 MB）。"),
+            },
         )
     } else {
         (
             true,
-            "芯片响应正常，Flash 与 MAC 均可读取，可正常烧录与运行。".to_string(),
+            tr(
+                lang,
+                "芯片响应正常，Flash 与 MAC 均可读取，可正常烧录与运行。",
+                "晶片回應正常，Flash 與 MAC 均可讀取，可正常燒錄與運行。",
+                "Chip responds normally; Flash and MAC are readable. The board is ready for flashing and operation.",
+            )
+            .to_string(),
         )
     };
 
     let features = if device.features.is_empty() {
-        "未报告".to_string()
+        tr(lang, "未报告", "未報告", "Not reported").to_string()
     } else {
         device.features.join(" · ")
     };
@@ -113,9 +154,9 @@ pub fn check_port(port_name: &str) -> Result<BoardReport, String> {
         chip: chip_name(device.chip),
         revision: match device.revision {
             Some((major, minor)) => format!("v{major}.{minor}"),
-            None => "未知".to_string(),
+            None => tr(lang, "未知", "未知", "Unknown").to_string(),
         },
-        mac: mac.unwrap_or_else(|| "未获取".to_string()),
+        mac: mac.unwrap_or_else(|| tr(lang, "未获取", "未獲取", "N/A").to_string()),
         flash,
         crystal: device.crystal_frequency.to_string(),
         features,
@@ -143,12 +184,20 @@ fn chip_name(chip: Chip) -> String {
     .to_string()
 }
 
-fn flash_text(size: FlashSize) -> String {
+fn flash_text(size: FlashSize, lang: u8) -> String {
     let bytes = size.size();
     if bytes >= 1024 * 1024 {
-        format!("{} MB（{} 字节）", bytes / (1024 * 1024), bytes)
+        match lang {
+            1 => format!("{} MB（{} 位元組）", bytes / (1024 * 1024), bytes),
+            2 => format!("{} MB ({} bytes)", bytes / (1024 * 1024), bytes),
+            _ => format!("{} MB（{} 字节）", bytes / (1024 * 1024), bytes),
+        }
     } else {
-        format!("{} KB（{} 字节）", bytes / 1024, bytes)
+        match lang {
+            1 => format!("{} KB（{} 位元組）", bytes / 1024, bytes),
+            2 => format!("{} KB ({} bytes)", bytes / 1024, bytes),
+            _ => format!("{} KB（{} 字节）", bytes / 1024, bytes),
+        }
     }
 }
 
@@ -162,19 +211,30 @@ fn mac_is_valid(mac: &str) -> bool {
     digits.len() == 12 && digits != "ffffffffffff" && digits != "000000000000"
 }
 
-fn describe(info: &SerialPortInfo) -> String {
+fn describe(info: &SerialPortInfo, lang: u8) -> String {
     match &info.port_type {
         SerialPortType::UsbPort(usb) => {
             let label = usb
                 .product
                 .clone()
                 .or_else(|| usb.manufacturer.clone())
-                .unwrap_or_else(|| "USB 串口设备".to_string());
+                .unwrap_or_else(|| {
+                    tr(lang, "USB 串口设备", "USB 串口裝置", "USB Serial Device").to_string()
+                });
             format!("{label} · VID:PID {:04X}:{:04X}", usb.vid, usb.pid)
         }
-        SerialPortType::BluetoothPort => "蓝牙串口".to_string(),
-        SerialPortType::PciPort => "PCI 串口".to_string(),
-        _ => "未知串口设备".to_string(),
+        SerialPortType::BluetoothPort => tr(lang, "蓝牙串口", "藍牙串口", "Bluetooth").to_string(),
+        SerialPortType::PciPort => tr(lang, "PCI 串口", "PCI 串口", "PCI").to_string(),
+        _ => tr(lang, "未知串口设备", "未知串口裝置", "Unknown Device").to_string(),
+    }
+}
+
+/// 按语言选择文案：0 简体中文，1 繁体中文，2 English
+fn tr<'a>(lang: u8, zh: &'a str, tw: &'a str, en: &'a str) -> &'a str {
+    match lang {
+        1 => tw,
+        2 => en,
+        _ => zh,
     }
 }
 
@@ -194,6 +254,17 @@ fn usb_info_for(port_name: &str) -> UsbPortInfo {
             manufacturer: None,
             product: None,
         })
+}
+
+/// 缓存键：优先用 USB 序列号，区分同一串口上更换的不同板子
+pub fn cache_key(port_name: &str) -> String {
+    let info = usb_info_for(port_name);
+    match info.serial_number {
+        Some(serial) if !serial.is_empty() => {
+            format!("usb:{:04X}:{:04X}:{serial}", info.vid, info.pid)
+        }
+        _ => port_name.to_string(),
+    }
 }
 
 /// 让 COM2 排在 COM10 前面

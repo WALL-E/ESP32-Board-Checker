@@ -1,4 +1,4 @@
-import { ScrollView } from "std-widgets.slint";
+import { ComboBox, ScrollView } from "std-widgets.slint";
 
 export struct PortEntry {
     name: string,
@@ -88,6 +88,8 @@ export component AppWindow inherits Window {
     in-out property <int> selected-index: 0;
     in property <string> selected-port-name: "未选择串口";
     in property <bool> busy: false;
+    // 语言：0 简体中文，1 繁体中文，2 English
+    in-out property <int> lang: 0;
 
     in property <string> status-text: "就绪，请选择一个串口后开始检测";
     in property <string> chip-text: "—";
@@ -96,6 +98,7 @@ export component AppWindow inherits Window {
     in property <string> flash-text: "—";
     in property <string> crystal-text: "—";
     in property <string> features-text: "—";
+    in property <string> last-check-text: "—";
 
     // verdict-kind: "idle" | "busy" | "ok" | "bad"
     in property <string> verdict-kind: "idle";
@@ -105,6 +108,29 @@ export component AppWindow inherits Window {
     callback refresh-ports();
     callback select-port(int);
     callback detect();
+    callback apply-language();
+
+    // ---- 界面文案（随 lang 切换）----
+    property <string> t-subtitle: lang == 2 ? "Scan serial ports · One-click check · Chip / MAC / Flash info" : lang == 1 ? "掃描串口 · 一鍵檢測 · 輸出晶片 / MAC / Flash 資訊" : "扫描串口 · 一键检测 · 输出芯片 / MAC / Flash 信息";
+    property <string> t-ports-title: lang == 2 ? "Serial Ports" : "串口列表";
+    property <string> t-refresh: lang == 2 ? "Refresh" : lang == 1 ? "重新整理" : "刷新";
+    property <string> t-empty-title: lang == 2 ? "No serial ports found" : lang == 1 ? "暫無可用串口" : "暂无可用串口";
+    property <string> t-empty-hint: lang == 2 ? "Connect the board via USB, then click Refresh" : lang == 1 ? "請連接開發板 USB 線後點擊重新整理" : "请连接开发板 USB 线后点击刷新";
+    property <string> t-list-hint: ports.length == 0
+        ? (lang == 2 ? "Waiting for a device…" : lang == 1 ? "等待串口裝置接入" : "等待串口设备接入")
+        : (lang == 2 ? "Ports found — select one to check" : lang == 1 ? "已發現串口，請選擇後檢測" : "已发现串口，请选择后检测");
+    property <string> t-detect-title: lang == 2 ? "One-Click Check" : lang == 1 ? "一鍵檢測" : "一键检测";
+    property <string> t-detect-button: busy
+        ? (lang == 2 ? "Checking…" : lang == 1 ? "檢測中…" : "检测中…")
+        : (lang == 2 ? "Check" : lang == 1 ? "一鍵檢測" : "一键检测");
+    property <string> t-info-title: lang == 2 ? "Device Info" : lang == 1 ? "裝置資訊" : "设备信息";
+    property <string> t-l-chip: lang == 2 ? "Chip" : lang == 1 ? "晶片型號" : "芯片型号";
+    property <string> t-l-rev: lang == 2 ? "Revision" : lang == 1 ? "晶片版本" : "芯片版本";
+    property <string> t-l-mac: lang == 2 ? "MAC" : lang == 1 ? "MAC 位址" : "MAC 地址";
+    property <string> t-l-flash: lang == 2 ? "Flash" : "Flash 容量";
+    property <string> t-l-xtal: lang == 2 ? "Crystal" : lang == 1 ? "晶振頻率" : "晶振频率";
+    property <string> t-l-features: lang == 2 ? "Features" : lang == 1 ? "晶片特性" : "芯片特性";
+    property <string> t-l-last: lang == 2 ? "Last Check" : lang == 1 ? "上次檢測" : "上次检测";
 
     VerticalLayout {
         padding: 24px;
@@ -124,13 +150,20 @@ export component AppWindow inherits Window {
                     font-weight: 700;
                 }
                 Text {
-                    text: "扫描串口 · 一键检测 · 输出芯片 / MAC / Flash 信息";
+                    text: root.t-subtitle;
                     color: #7d8590;
                     font-size: 12px;
                 }
             }
 
             Rectangle { horizontal-stretch: 1; }
+
+            ComboBox {
+                width: 132px;
+                model: ["简体中文", "繁体中文", "English"];
+                current-index <=> root.lang;
+                selected => { root.apply-language(); }
+            }
         }
 
         // ---------- Body ----------
@@ -150,7 +183,7 @@ export component AppWindow inherits Window {
                         spacing: 8px;
 
                         Text {
-                            text: "串口列表";
+                            text: root.t-ports-title;
                             color: #e6edf3;
                             font-size: 15px;
                             font-weight: 600;
@@ -160,8 +193,8 @@ export component AppWindow inherits Window {
                         Rectangle { horizontal-stretch: 1; }
 
                         ActionButton {
-                            label: "刷新";
-                            button-width: 68px;
+                            label: root.t-refresh;
+                            button-width: root.lang == 2 ? 84px : 68px;
                             active: !root.busy;
                             clicked => { root.refresh-ports(); }
                         }
@@ -178,13 +211,13 @@ export component AppWindow inherits Window {
                             alignment: center;
                             spacing: 6px;
                             Text {
-                                text: "暂无可用串口";
+                                text: root.t-empty-title;
                                 color: #7d8590;
                                 font-size: 13px;
                                 horizontal-alignment: center;
                             }
                             Text {
-                                text: "请连接开发板 USB 线后点击刷新";
+                                text: root.t-empty-hint;
                                 color: #5b6472;
                                 font-size: 11px;
                                 horizontal-alignment: center;
@@ -253,7 +286,7 @@ export component AppWindow inherits Window {
                     }
 
                     Text {
-                        text: root.ports.length == 0 ? "等待串口设备接入" : "已发现串口，请选择后检测";
+                        text: root.t-list-hint;
                         color: #5b6472;
                         font-size: 11px;
                     }
@@ -271,7 +304,7 @@ export component AppWindow inherits Window {
                         spacing: 12px;
 
                         Text {
-                            text: "一键检测";
+                            text: root.t-detect-title;
                             color: #e6edf3;
                             font-size: 15px;
                             font-weight: 600;
@@ -281,7 +314,7 @@ export component AppWindow inherits Window {
                             spacing: 12px;
 
                             ActionButton {
-                                label: root.busy ? "检测中…" : "一键检测";
+                                label: root.t-detect-button;
                                 primary: true;
                                 button-width: 140px;
                                 active: !root.busy && root.ports.length > 0;
@@ -316,18 +349,19 @@ export component AppWindow inherits Window {
                         spacing: 14px;
 
                         Text {
-                            text: "设备信息";
+                            text: root.t-info-title;
                             color: #e6edf3;
                             font-size: 15px;
                             font-weight: 600;
                         }
 
-                        InfoRow { label: "芯片型号"; value: root.chip-text; }
-                        InfoRow { label: "芯片版本"; value: root.revision-text; }
-                        InfoRow { label: "MAC 地址"; value: root.mac-text; }
-                        InfoRow { label: "Flash 容量"; value: root.flash-text; }
-                        InfoRow { label: "晶振频率"; value: root.crystal-text; }
-                        InfoRow { label: "芯片特性"; value: root.features-text; }
+                        InfoRow { label: root.t-l-chip; value: root.chip-text; }
+                        InfoRow { label: root.t-l-rev; value: root.revision-text; }
+                        InfoRow { label: root.t-l-mac; value: root.mac-text; }
+                        InfoRow { label: root.t-l-flash; value: root.flash-text; }
+                        InfoRow { label: root.t-l-xtal; value: root.crystal-text; }
+                        InfoRow { label: root.t-l-features; value: root.features-text; }
+                        InfoRow { label: root.t-l-last; value: root.last-check-text; }
 
                         Rectangle { vertical-stretch: 1; }
                     }

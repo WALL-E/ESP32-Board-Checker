@@ -8,6 +8,7 @@ description = "ESP32 Board Checker - scan serial ports and inspect ESP chips"
 slint = "1.18"
 serialport = "4.10"
 espflash = { version = "4.7", default-features = false, features = ["serialport"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [build-dependencies]
 slint-build = "1.18"
