@@ -15,7 +15,7 @@ export global Palette {
     out property <color> text: #ececee;
     out property <color> text-secondary: #c7c7cc;
     out property <color> text-muted: #9a9aa1;
-    out property <color> text-dim: #6b6b71;
+    out property <color> text-dim: #82828a;
     // 按钮与强调色
     out property <color> accent: #2563eb;
     out property <color> accent-hover: #2f7fe0;
@@ -108,7 +108,7 @@ export component InfoRow inherits HorizontalLayout {
 
     Text {
         text: root.label;
-        width: 88px;
+        width: 92px;
         color: Palette.text-muted;
         font-size: 13px;
         vertical-alignment: center;
@@ -118,7 +118,7 @@ export component InfoRow inherits HorizontalLayout {
         text: root.value;
         color: Palette.text;
         font-size: 13px;
-        font-weight: root.strong ? 700 : 400;
+        font-weight: root.strong ? 700 : 500;
         horizontal-stretch: 1;
         wrap: word-wrap;
         vertical-alignment: center;
@@ -131,6 +131,7 @@ export component InfoRow inherits HorizontalLayout {
         font-size: 13px;
         font-weight: 600;
         font-family: "Cascadia Mono";
+        letter-spacing: 0.5px;
         horizontal-stretch: 1;
         wrap: word-wrap;
     }
@@ -302,7 +303,7 @@ export component VerdictCard inherits Card {
             Text {
                 text: root.verdict-reason;
                 color: Palette.text-secondary;
-                font-size: 12px;
+                font-size: 13px;
                 wrap: word-wrap;
             }
         }
